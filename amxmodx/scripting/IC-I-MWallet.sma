@@ -12,10 +12,15 @@ public stock const PluginURL[] = "t.me/arkaneman";
 
 new const BUY_TYPE_NAME[] = "MWallet-Buy";
 new const DEBIT_TYPE_NAME[] = "MWallet-Debit";
+new const SET_TYPE_NAME[] = "MWallet-Set";
 
 public VipM_IC_OnInitTypes() {
     register_plugin(PluginName, PluginVersion, PluginAuthor);
     MWallet_Init();
+
+    VipM_IC_RegisterType(SET_TYPE_NAME);
+    VipM_IC_RegisterTypeEvent(SET_TYPE_NAME, ItemType_OnRead, "@OnSetRead");
+    VipM_IC_RegisterTypeEvent(SET_TYPE_NAME, ItemType_OnGive, "@OnSetGive");
 
     VipM_IC_RegisterType(DEBIT_TYPE_NAME);
     VipM_IC_RegisterTypeEvent(DEBIT_TYPE_NAME, ItemType_OnRead, "@OnDebitRead");
@@ -24,6 +29,38 @@ public VipM_IC_OnInitTypes() {
     VipM_IC_RegisterType(BUY_TYPE_NAME);
     VipM_IC_RegisterTypeEvent(BUY_TYPE_NAME, ItemType_OnRead, "@OnBuyRead");
     VipM_IC_RegisterTypeEvent(BUY_TYPE_NAME, ItemType_OnGive, "@OnBuyGive");
+}
+
+@OnSetRead(const JSON:itemJson, Trie:p) {
+    if (!json_object_has_value(itemJson, "Currency", JSONString)) {
+        VipM_Json_LogForFile(itemJson, "WARNING", "Parameter `Currency` required for `%s` item type.", SET_TYPE_NAME);
+        return VIPM_STOP;
+    }
+
+    if (!json_object_has_value(itemJson, "Amount", JSONNumber)) {
+        VipM_Json_LogForFile(itemJson, "WARNING", "Parameter `Amount` required for `%s` item type.", SET_TYPE_NAME);
+        return VIPM_STOP;
+    }
+
+    new currencyName[MWALLET_CURRENCY_MAX_NAME_LEN];
+    json_object_get_string(itemJson, "Currency", currencyName, charsmax(currencyName));
+    new T_Currency:currency = MWallet_Currency_Find(currencyName);
+    if (currency == Invalid_Currency) {
+        VipM_Json_LogForFile(itemJson, "WARNING", "Currency `%s` not found.", currencyName);
+        return VIPM_STOP;
+    }
+    TrieSetCell(p, "Currency", currency);
+
+    TrieSetCell(p, "Amount", json_object_get_real(itemJson, "Amount"));
+
+    return VIPM_CONTINUE;
+}
+
+@OnSetGive(const playerIndex, const Trie:p) {
+    new T_Currency:currency = VipM_Params_GetCell(p, "Currency");
+    new Float:amount = VipM_Params_GetFloat(p, "Amount");
+
+    return MWallet_Currency_Set(currency, playerIndex, amount) ? VIPM_CONTINUE : VIPM_STOP;
 }
 
 @OnDebitRead(const JSON:itemJson, Trie:p) {
